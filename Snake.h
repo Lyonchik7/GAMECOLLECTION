@@ -7,6 +7,7 @@
 
 class QTimer;
 class QLabel;
+class QPushButton;
 
 class Snake : public QWidget
 {
@@ -22,6 +23,7 @@ protected:
 
 private slots:
     void gameLoop();
+    void togglePause();
 
 private:
     void restartGame();
@@ -42,9 +44,11 @@ private:
     int nextDirection;
     int score;
     bool gameRunning;
+    bool isPaused;
 
     QTimer *timer;
     QLabel *scoreLabel;
+    QPushButton *pauseBtn;
 };
 
 #endif // SNAKE_H
