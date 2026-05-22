@@ -15,6 +15,7 @@ Snake::Snake(QWidget *parent)
     , nextDirection(3)
     , score(0)
     , gameRunning(true)
+    , isPaused(false)
 {
     setWindowTitle("Змейка");
     setFixedSize(GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE + 50);
@@ -29,6 +30,10 @@ Snake::Snake(QWidget *parent)
     scoreLabel = new QLabel("Счет: 0");
     scoreLabel->setFont(QFont("Arial", 14));
     panelLayout->addWidget(scoreLabel);
+
+    pauseBtn = new QPushButton("Пауза");
+    connect(pauseBtn, &QPushButton::clicked, this, &Snake::togglePause);
+    panelLayout->addWidget(pauseBtn);
 
     QPushButton *restartBtn = new QPushButton("Новая игра");
     connect(restartBtn, &QPushButton::clicked, this, &Snake::restartGame);
@@ -59,11 +64,29 @@ void Snake::restartGame()
     direction = nextDirection = 3;
     score = 0;
     gameRunning = true;
+    isPaused = false;
+    pauseBtn->setText("Пауза");
     scoreLabel->setText("Счет: 0");
 
     spawnFood();
     timer->start(TIMER_INTERVAL);
     update();
+}
+
+void Snake::togglePause()
+{
+    if (!gameRunning) return;
+    
+    isPaused = !isPaused;
+    
+    if (isPaused) {
+        pauseBtn->setText("Старт");
+        timer->stop();
+    } else {
+        pauseBtn->setText("Пауза");
+        timer->start(TIMER_INTERVAL);
+        update();
+    }
 }
 
 void Snake::spawnFood()
@@ -85,7 +108,7 @@ void Snake::spawnFood()
 
 void Snake::keyPressEvent(QKeyEvent *event)
 {
-    if (!gameRunning) return;
+    if (!gameRunning || isPaused) return;
 
     switch (event->key()) {
     case Qt::Key_Up:
@@ -100,12 +123,16 @@ void Snake::keyPressEvent(QKeyEvent *event)
     case Qt::Key_Right:
         if (direction != 2) nextDirection = 3;
         break;
+    case Qt::Key_Space:
+    case Qt::Key_P:
+        togglePause();
+        break;
     }
 }
 
 void Snake::gameLoop()
 {
-    if (!gameRunning) return;
+    if (!gameRunning || isPaused) return;
 
     direction = nextDirection;
     move();
@@ -166,6 +193,7 @@ bool Snake::checkCollision()
 void Snake::gameOver()
 {
     gameRunning = false;
+    isPaused = false;
     timer->stop();
     QMessageBox::information(this, "Игра окончена",
                              QString("Ваш счет: %1").arg(score));
@@ -176,6 +204,7 @@ void Snake::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.fillRect(0, 50, width(), height() - 50, QColor(0, 0, 0));
 
+    // Рисуем змейку
     for (int i = 0; i < snake.size(); ++i) {
         QPoint p = snake[i];
         QColor color = (i == 0) ? QColor(144, 238, 144) : QColor(0, 255, 0);
@@ -183,8 +212,16 @@ void Snake::paintEvent(QPaintEvent *)
                          CELL_SIZE - 1, CELL_SIZE - 1, color);
     }
 
+    // Рисуем еду
     painter.setBrush(Qt::red);
     painter.setPen(Qt::darkRed);
     painter.drawEllipse(food.x() * CELL_SIZE, 50 + food.y() * CELL_SIZE,
                         CELL_SIZE - 2, CELL_SIZE - 2);
+
+    // Рисуем текст паузы
+    if (isPaused && gameRunning) {
+        painter.setPen(Qt::white);
+        painter.setFont(QFont("Arial", 24, QFont::Bold));
+        painter.drawText(rect().adjusted(0, 50, 0, 0), Qt::AlignCenter, "ПАУЗА");
+    }
 }
