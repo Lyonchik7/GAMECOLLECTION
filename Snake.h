@@ -2,53 +2,106 @@
 #define SNAKE_H
 
 #include <QWidget>
-#include <QList>
+#include <QTimer>
 #include <QPoint>
+#include <QPointF>
+#include <QVector>
+#include <QColor>
+#include <QComboBox>
+#include <QLabel>
+#include <QPushButton>
+#include <QPropertyAnimation>
 
-class QTimer;
-class QLabel;
-class QPushButton;
+struct SnakeSegment {
+    QPoint gridPos;
+    QPointF renderPos;
+    double width;
+    int direction;
+};
 
 class Snake : public QWidget
 {
     Q_OBJECT
+    Q_PROPERTY(float previewSmooth READ getPreviewSmooth WRITE setPreviewSmooth)
 
 public:
     explicit Snake(QWidget *parent = nullptr);
     ~Snake();
+
+    static constexpr int GRID_WIDTH = 20;
+    static constexpr int GRID_HEIGHT = 20;
+    static constexpr int CELL_SIZE = 25;
+    static constexpr int BUTTON_PANEL_HEIGHT = 60;
+    static constexpr int GAME_UPDATE_INTERVAL = 180;
+    static constexpr int RENDER_INTERVAL = 16;
 
 protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
-    void gameLoop();
+    void startGame();
+    void restartGame();
     void togglePause();
+    void gameLoop();
+    void changeSnakeColor(int index);
 
 private:
-    void restartGame();
+    void updateUIGeometry();
     void spawnFood();
     void move();
-    bool checkCollision();
+    void applyDirection();
+    void updateRenderPositions();
     void checkFoodCollision();
+    bool checkCollision();
     void gameOver();
 
-    static const int CELL_SIZE = 20;
-    static const int GRID_WIDTH = 30;
-    static const int GRID_HEIGHT = 20;
-    static const int TIMER_INTERVAL = 150;
+    void drawSnakePreview(QPainter &painter, int centerX, int centerY, double scale, int dir);
+    QColor getSnakeGradientStart(int index, bool isHead) const;
+    QColor getSnakeGradientEnd(int index, bool isHead) const;
 
-    QList<QPoint> snake;
-    QPoint food;
+    int getGameAreaY() const { return BUTTON_PANEL_HEIGHT; }
+    float getPreviewSmooth() const { return previewSmooth; }
+    void setPreviewSmooth(float value) { previewSmooth = value; update(); }
+
+    QVector<SnakeSegment> snake;
+    QPoint foodGrid;
+    QPointF foodPos;
+
     int direction;
     int nextDirection;
     int score;
-    bool gameRunning;
-    bool isPaused;
 
-    QTimer *timer;
+    bool gameRunning;
+    bool gameStarted;
+    bool isPaused;
+    bool pendingMove;
+
+    bool isMoving;
+    double animationProgress;
+    QVector<QPointF> segmentStartPositions;
+    QVector<QPointF> segmentTargetPositions;
+    QVector<int> prevDirections;
+
+    // Анимация поедания
+    bool isEating;
+    float eatAnimProgress;
+
     QLabel *scoreLabel;
+    QLabel *colorLabel;
+    QComboBox *colorCombo;
+    QPushButton *startBtn;
     QPushButton *pauseBtn;
+    QPushButton *restartBtn;
+
+    QTimer *gameTimer;
+    QTimer *renderTimer;
+    QPropertyAnimation *previewSmoothAnimation;
+
+    int selectedColor;
+    int previewDirection;
+    float previewSmooth;
+    float previewPhase;
 };
 
-#endif // SNAKE_H
+#endif
