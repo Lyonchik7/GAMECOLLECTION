@@ -2,23 +2,10 @@
 #define GAME2048_H
 
 #include <QWidget>
+#include <QLabel>
+#include <QPushButton>
+#include <QVector>
 #include <QMap>
-#include <QPropertyAnimation>
-#include <QParallelAnimationGroup>
-
-class QLabel;
-class QGraphicsOpacityEffect;
-
-class Tile {
-public:
-    int value;
-    int x, y;
-    int targetX, targetY;
-    bool isNew;
-    bool isMerged;
-    
-    Tile() : value(0), x(0), y(0), targetX(0), targetY(0), isNew(false), isMerged(false) {}
-};
 
 class Game2048 : public QWidget
 {
@@ -33,40 +20,45 @@ protected:
 
 private slots:
     void restartGame();
-    void animateTile(int fromX, int fromY, int toX, int toY);
+    void showHighScores();
 
 private:
     void addNewTile();
+
     void moveLeft();
     void moveRight();
     void moveUp();
     void moveDown();
-    bool canMove();
-    void checkGameOver();
-    void updateScore(int points);
-    void createScoreAnimation(int x, int y, int points);
-    void animateTileAppearance(int x, int y);
-    void saveBoardState();
-    bool compareBoardState();
 
+    bool canMove();
+    void checkGameState();
+
+    void updateScore(int points);
+
+    void saveData();
+    void loadData();
+
+private:
     static const int SIZE = 4;
-    static const int CELL_SIZE = 110;
-    static const int PADDING = 15;
 
     int board[SIZE][SIZE];
-    int savedBoard[SIZE][SIZE];
+
     int score;
     int bestScore;
+
     bool gameOver;
     bool win;
 
-    QMap<int, QColor> tileColors;
+    QVector<int> highScores;
+
     QLabel *scoreLabel;
     QLabel *bestScoreLabel;
-    QLabel *gameStatusLabel;
-    QParallelAnimationGroup *animationGroup;
-    
-    QVector<QPair<QPoint, QPoint>> movingTiles;
+    QLabel *statusLabel;
+
+    QPushButton *restartButton;
+    QPushButton *recordsButton;
+
+    QMap<int, QColor> tileColors;
 };
 
 #endif // GAME2048_H
