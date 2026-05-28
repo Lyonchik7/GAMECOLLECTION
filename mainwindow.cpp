@@ -201,8 +201,9 @@ void MainWindow::open2048()
 
 void MainWindow::openMario()
 {
-    SimpleMario *game = new SimpleMario();
+    SimpleMario *game = new SimpleMario(1);
     game->setAttribute(Qt::WA_DeleteOnClose);
     game->show();
+    game->startGame();
     statusLabel->setText("✅ Игра 'Марио' запущена");
 }
