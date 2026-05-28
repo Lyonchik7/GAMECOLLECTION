@@ -1,267 +1,702 @@
 #include "Minessweeper.h"
-#include <QGridLayout>
-#include <QPushButton>
-#include <QMessageBox>
-#include <QLabel>
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QGridLayout>
+#include <QMessageBox>
 #include <QRandomGenerator>
 #include <QMouseEvent>
+#include <QPropertyAnimation>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QSizePolicy>
+#include <QEvent>
+#include <cmath>
 
 Minessweeper::Minessweeper(QWidget *parent)
-    : QWidget(parent)
-    , flagsPlaced(0)
-    , gameOver(false)
-    , firstClick(true)
+    : QWidget(parent), timer(new QTimer(this))
 {
-    setWindowTitle("Сапёр");
-    setFixedSize(320, 400);
+    setWindowTitle("💣 САПЁР");
+
+    resize(900, 760);
+    setMinimumSize(700, 650);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
 
-    QHBoxLayout *topLayout = new QHBoxLayout();
+    stack = new QStackedWidget(this);
+    mainLayout->addWidget(stack);
 
-    QLabel *minesLabel = new QLabel(QString("💣 %1").arg(MINES_COUNT));
-    minesLabel->setFont(QFont("Arial", 12));
-    topLayout->addWidget(minesLabel);
+    createMenu();
+    stack->addWidget(menuWidget);
+    stack->setCurrentWidget(menuWidget);
 
-    QPushButton *restartBtn = new QPushButton("Новая игра");
-    connect(restartBtn, &QPushButton::clicked, this, &Minessweeper::restartGame);
-    topLayout->addWidget(restartBtn);
+    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
+    move((screenGeometry.width() - width()) / 2,
+         (screenGeometry.height() - height()) / 2);
+}
 
+void Minessweeper::createMenu()
+{
+    menuWidget = new QWidget();
+    QVBoxLayout *menuLayout = new QVBoxLayout(menuWidget);
+    menuLayout->setContentsMargins(40, 20, 40, 20);
+
+    QLabel *title = new QLabel("💣 САПЁР");
+    title->setAlignment(Qt::AlignCenter);
+    title->setStyleSheet(R"(
+        font-size: 36px;
+        font-weight: bold;
+        color: white;
+        margin-top: 20px;
+    )");
+
+    QLabel *subtitle = new QLabel("Выберите настройки игры");
+    subtitle->setAlignment(Qt::AlignCenter);
+    subtitle->setStyleSheet(R"(
+        font-size: 18px;
+        color: #DDDDDD;
+        margin-bottom: 20px;
+    )");
+
+    difficultyBox = new QComboBox();
+    difficultyBox->addItem("🟢 Лёгкий");
+    difficultyBox->addItem("🟡 Средний");
+    difficultyBox->addItem("🔴 Сложный");
+    difficultyBox->setStyleSheet(R"(
+        QComboBox {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 18px;
+        }
+    )");
+
+    difficultyDescription = new QLabel();
+    difficultyDescription->setWordWrap(true);
+    difficultyDescription->setStyleSheet(R"(
+        color: white;
+        font-size: 15px;
+        padding: 10px;
+    )");
+
+    themeBox = new QComboBox();
+    themeBox->addItem("🌞 День");
+    themeBox->addItem("🌙 Ночь");
+    themeBox->setStyleSheet(R"(
+        QComboBox {
+            background: white;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 18px;
+        }
+    )");
+
+    themeDescription = new QLabel();
+    themeDescription->setWordWrap(true);
+    themeDescription->setStyleSheet(R"(
+        color: white;
+        font-size: 15px;
+        padding: 10px;
+    )");
+
+    QPushButton *startBtn = new QPushButton("▶ НАЧАТЬ ИГРУ");
+    startBtn->setFixedHeight(60);
+    startBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 14px;
+            font-size: 22px;
+            font-weight: bold;
+        }
+        QPushButton:hover {
+            background-color: #66BB6A;
+        }
+    )");
+
+    connect(startBtn, &QPushButton::clicked, this, &Minessweeper::startGame);
+    connect(difficultyBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Minessweeper::updateDescriptions);
+    connect(themeBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &Minessweeper::updateDescriptions);
+
+    hintLabel = new QLabel(
+        "💡 ЛКМ — открыть клетку\n"
+        "💡 ПКМ — поставить флаг\n"
+        "💡 Первый клик безопасен");
+
+    hintLabel->setAlignment(Qt::AlignCenter);
+    hintLabel->setWordWrap(true);
+    hintLabel->setStyleSheet(R"(
+        color: white;
+        font-size: 16px;
+        margin-top: 20px;
+    )");
+
+    menuLayout->addWidget(title);
+    menuLayout->addWidget(subtitle);
+    menuLayout->addWidget(difficultyBox);
+    menuLayout->addWidget(difficultyDescription);
+    menuLayout->addSpacing(10);
+    menuLayout->addWidget(themeBox);
+    menuLayout->addWidget(themeDescription);
+    menuLayout->addSpacing(20);
+    menuLayout->addWidget(startBtn);
+    menuLayout->addStretch();
+    menuLayout->addWidget(hintLabel);
+
+    updateDescriptions();
+    applyMenuTheme();
+}
+
+void Minessweeper::applyMenuTheme()
+{
+    if (themeBox->currentIndex() == 0)
+    {
+        menuWidget->setStyleSheet(R"(
+            QWidget {
+                background-color: #87CEEB;
+                color: white;
+                font-family: Segoe UI;
+            }
+
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+            }
+
+            QComboBox {
+                background: white;
+                padding: 12px;
+                border-radius: 10px;
+                font-size: 18px;
+                color: black;
+            }
+        )");
+    }
+    else
+    {
+        menuWidget->setStyleSheet(R"(
+            QWidget {
+                background-color: #111111;
+                color: white;
+                font-family: Segoe UI;
+            }
+
+            QLabel {
+                font-size: 18px;
+                font-weight: bold;
+            }
+
+            QComboBox {
+                background: #2B2B2B;
+                padding: 12px;
+                border-radius: 10px;
+                font-size: 18px;
+                color: white;
+            }
+        )");
+    }
+}
+
+void Minessweeper::updateDescriptions()
+{
+    switch (difficultyBox->currentIndex())
+    {
+    case 0:
+        difficultyDescription->setText(
+            "🟢 Лёгкий режим:\n"
+            "Поле 10x10 и 15 мин.\n"
+            "Подходит новичкам.");
+        break;
+    case 1:
+        difficultyDescription->setText(
+            "🟡 Средний режим:\n"
+            "Поле 12x12 и 25 мин.\n"
+            "Требует внимательности.");
+        break;
+    case 2:
+        difficultyDescription->setText(
+            "🔴 Сложный режим:\n"
+            "Поле 16x16 и 45 мин.\n"
+            "Настоящее испытание.");
+        break;
+    }
+
+    switch (themeBox->currentIndex())
+    {
+    case 0:
+        themeDescription->setText(
+            "🌞 Светлая дневная тема.\n"
+            "Яркий интерфейс.");
+        break;
+    case 1:
+        themeDescription->setText(
+            "🌙 Тёмная ночная тема.\n"
+            "Комфортна для глаз.");
+        break;
+    }
+
+    applyMenuTheme();
+}
+
+void Minessweeper::startGame()
+{
+    if (gameWidget)
+    {
+        stack->removeWidget(gameWidget);
+        gameWidget->deleteLater();
+        gameWidget = nullptr;
+    }
+
+    if (difficultyBox->currentIndex() == 0)
+    {
+        ROWS = 10;
+        COLS = 10;
+        MINES = 15;
+    }
+    else if (difficultyBox->currentIndex() == 1)
+    {
+        ROWS = 12;
+        COLS = 12;
+        MINES = 25;
+    }
+    else
+    {
+        ROWS = 16;
+        COLS = 16;
+        MINES = 45;
+    }
+
+    applyTheme();
+
+    gameWidget = new QWidget();
+    gameWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(gameWidget);
+    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setSpacing(10);
+
+    QHBoxLayout *top = new QHBoxLayout();
+
+    QLabel *mineText = new QLabel(QString("💣 %1").arg(MINES));
     flagsLabel = new QLabel("🚩 0");
-    flagsLabel->setFont(QFont("Arial", 12));
-    topLayout->addWidget(flagsLabel);
-    topLayout->addStretch();
+    timerLabel = new QLabel("⏱ 0");
 
-    mainLayout->addLayout(topLayout);
+    QPushButton *restart = new QPushButton("🔄 Новая игра");
+    restart->setFixedHeight(45);
+    restart->setStyleSheet(R"(
+        QPushButton {
+            background-color: #2196F3;
+            color: white;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 8px 15px;
+        }
+        QPushButton:hover {
+            background-color: #42A5F5;
+        }
+    )");
 
-    QGridLayout *gridLayout = new QGridLayout();
-    gridLayout->setSpacing(1);
+    QPushButton *backBtn = new QPushButton("⬅ Назад");
+    backBtn->setFixedHeight(45);
+    backBtn->setStyleSheet(R"(
+        QPushButton {
+            background-color: #FF7043;
+            color: white;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            padding: 8px 15px;
+        }
+        QPushButton:hover {
+            background-color: #FF8A65;
+        }
+    )");
 
+    connect(restart, &QPushButton::clicked, this, &Minessweeper::restartGame);
+
+    connect(backBtn, &QPushButton::clicked, this, [this]() {
+        if (timer)
+            timer->stop();
+
+        if (gameWidget)
+        {
+            stack->removeWidget(gameWidget);
+            gameWidget->deleteLater();
+            gameWidget = nullptr;
+        }
+
+        stack->setCurrentWidget(menuWidget);
+        applyMenuTheme();
+    });
+
+    top->addWidget(mineText);
+    top->addSpacing(10);
+    top->addWidget(flagsLabel);
+    top->addSpacing(10);
+    top->addWidget(timerLabel);
+    top->addStretch();
+    top->addWidget(restart);
+    top->addWidget(backBtn);
+
+    mainLayout->addLayout(top);
+
+    QGridLayout *grid = new QGridLayout();
+    grid->setSpacing(2);
+    grid->setContentsMargins(5, 5, 5, 5);
+
+    buttons.clear();
     buttons.resize(ROWS);
-    for (int i = 0; i < ROWS; ++i) {
+
+    for (int i = 0; i < ROWS; i++)
+    {
         buttons[i].resize(COLS);
-        for (int j = 0; j < COLS; ++j) {
+
+        for (int j = 0; j < COLS; j++)
+        {
             QPushButton *btn = new QPushButton();
-            btn->setFixedSize(30, 30);
-            btn->setFont(QFont("Arial", 10, QFont::Bold));
-            btn->setContextMenuPolicy(Qt::PreventContextMenu);
 
-            connect(btn, &QPushButton::clicked, this, &Minessweeper::onLeftClick);
+            btn->setMinimumSize(28, 28);
+            btn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+            btn->setProperty("row", i);
+            btn->setProperty("col", j);
+            btn->installEventFilter(this);
+            btn->setStyleSheet(R"(
+                QPushButton {
+                    background-color: #43A047;
+                    border: 2px solid #2E7D32;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background-color: #66BB6A;
+                }
+            )");
 
-            gridLayout->addWidget(btn, i, j);
+            grid->addWidget(btn, i, j);
             buttons[i][j] = btn;
         }
     }
 
-    mainLayout->addLayout(gridLayout);
+    mainLayout->addLayout(grid);
+
+    stack->addWidget(gameWidget);
+    stack->setCurrentWidget(gameWidget);
+
+    timer->stop();
+    seconds = 0;
+    timerLabel->setText("⏱ 0");
+
     restartGame();
+}
+
+void Minessweeper::applyTheme()
+{
+    if (themeBox->currentIndex() == 0)
+        backgroundColor = "#87CEEB";
+    else
+        backgroundColor = "#111111";
+
+    setStyleSheet(QString(R"(
+        QWidget {
+            background-color: %1;
+            color: white;
+            font-family: Segoe UI;
+        }
+
+        QLabel {
+            font-size: 18px;
+            font-weight: bold;
+        }
+    )").arg(backgroundColor));
 }
 
 void Minessweeper::restartGame()
 {
-    mines.resize(ROWS);
-    numbers.resize(ROWS);
-    opened.resize(ROWS);
-    flagged.resize(ROWS);
+    if (!gameWidget)
+        return;
 
-    for (int i = 0; i < ROWS; ++i) {
-        mines[i].resize(COLS, false);
-        numbers[i].resize(COLS, 0);
-        opened[i].resize(COLS, false);
-        flagged[i].resize(COLS, false);
-    }
+    mines = QVector<QVector<bool>>(ROWS, QVector<bool>(COLS, false));
+    numbers = QVector<QVector<int>>(ROWS, QVector<int>(COLS, 0));
+    opened = QVector<QVector<bool>>(ROWS, QVector<bool>(COLS, false));
+    flagged = QVector<QVector<bool>>(ROWS, QVector<bool>(COLS, false));
 
     flagsPlaced = 0;
     gameOver = false;
     firstClick = true;
+    seconds = 0;
 
-    for (int i = 0; i < ROWS; ++i) {
-        for (int j = 0; j < COLS; ++j) {
-            buttons[i][j]->setText("");
+    if (timer)
+        timer->stop();
+
+    timerLabel->setText("⏱ 0");
+
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLS; j++)
+        {
             buttons[i][j]->setEnabled(true);
-            buttons[i][j]->setStyleSheet("");
+            buttons[i][j]->setText("");
+            buttons[i][j]->setStyleSheet(R"(
+                QPushButton {
+                    background-color: #43A047;
+                    border: 2px solid #2E7D32;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: white;
+                }
+                QPushButton:hover {
+                    background-color: #66BB6A;
+                }
+            )");
         }
     }
 
-    updateFlagsLabel();
+    updateFlags();
 }
 
 void Minessweeper::placeMines(int firstRow, int firstCol)
 {
-    int minesPlaced = 0;
-    while (minesPlaced < MINES_COUNT) {
+    int placed = 0;
+
+    while (placed < MINES)
+    {
         int r = QRandomGenerator::global()->bounded(ROWS);
         int c = QRandomGenerator::global()->bounded(COLS);
 
-        if (!mines[r][c] && !(r == firstRow && c == firstCol)) {
+        bool safe = std::abs(r - firstRow) <= 1 && std::abs(c - firstCol) <= 1;
+
+        if (!mines[r][c] && !safe)
+        {
             mines[r][c] = true;
-            minesPlaced++;
+            placed++;
         }
     }
 
-    for (int i = 0; i < ROWS; ++i) {
-        for (int j = 0; j < COLS; ++j) {
-            if (mines[i][j]) {
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLS; j++)
+        {
+            if (mines[i][j])
                 numbers[i][j] = -1;
-            } else {
-                numbers[i][j] = countAdjacentMines(i, j);
-            }
+            else
+                numbers[i][j] = countAdjacent(i, j);
         }
     }
 }
 
-int Minessweeper::countAdjacentMines(int row, int col)
+int Minessweeper::countAdjacent(int row, int col)
 {
     int count = 0;
-    for (int dr = -1; dr <= 1; ++dr) {
-        for (int dc = -1; dc <= 1; ++dc) {
-            if (dr == 0 && dc == 0) continue;
-            int nr = row + dr, nc = col + dc;
+
+    for (int dr = -1; dr <= 1; dr++)
+    {
+        for (int dc = -1; dc <= 1; dc++)
+        {
+            int nr = row + dr;
+            int nc = col + dc;
+
             if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && mines[nr][nc])
                 count++;
         }
     }
+
     return count;
 }
 
-void Minessweeper::onLeftClick()
+bool Minessweeper::eventFilter(QObject *obj, QEvent *event)
 {
-    if (gameOver) return;
+    QPushButton *btn = qobject_cast<QPushButton*>(obj);
+    if (!btn)
+        return false;
 
-    QPushButton *btn = qobject_cast<QPushButton*>(sender());
-    if (!btn) return;
+    int row = btn->property("row").toInt();
+    int col = btn->property("col").toInt();
 
-    int row = -1, col = -1;
-    for (int i = 0; i < ROWS; ++i) {
-        for (int j = 0; j < COLS; ++j) {
-            if (buttons[i][j] == btn) {
-                row = i; col = j;
-                break;
-            }
-        }
-        if (row != -1) break;
-    }
+    if (event->type() == QEvent::MouseButtonPress)
+    {
+        QMouseEvent *mouse = static_cast<QMouseEvent*>(event);
 
-    if (flagged[row][col]) return;
+        if (mouse->button() == Qt::RightButton)
+        {
+            if (!opened[row][col] && !gameOver)
+            {
+                flagged[row][col] = !flagged[row][col];
 
-    if (firstClick) {
-        placeMines(row, col);
-        firstClick = false;
-    }
-
-    if (mines[row][col]) {
-        gameOver = true;
-        btn->setText("💣");
-        btn->setStyleSheet("background-color: red;");
-
-        for (int i = 0; i < ROWS; ++i) {
-            for (int j = 0; j < COLS; ++j) {
-                if (mines[i][j]) {
-                    buttons[i][j]->setText("💣");
+                if (flagged[row][col])
+                {
+                    btn->setText("🚩");
+                    flagsPlaced++;
                 }
+                else
+                {
+                    btn->setText("");
+                    flagsPlaced--;
+                }
+
+                updateFlags();
             }
+
+            return true;
         }
 
-        QMessageBox::information(this, "БУМ!", "Вы наступили на мину!");
-    } else {
-        openCell(row, col);
-        checkWin();
-    }
-}
+        if (mouse->button() == Qt::LeftButton)
+        {
+            if (flagged[row][col] || gameOver)
+                return true;
 
-void Minessweeper::onRightClick()
-{
-    if (gameOver) return;
-
-    QPushButton *btn = qobject_cast<QPushButton*>(sender());
-    if (!btn) return;
-
-    int row = -1, col = -1;
-    for (int i = 0; i < ROWS; ++i) {
-        for (int j = 0; j < COLS; ++j) {
-            if (buttons[i][j] == btn) {
-                row = i; col = j;
-                break;
+            if (firstClick)
+            {
+                placeMines(row, col);
+                firstClick = false;
+                timer->start(1000);
             }
+
+            if (mines[row][col])
+            {
+                gameOver = true;
+                timer->stop();
+
+                explodeAnimation(row, col);
+                shakeWindow();
+
+                for (int i = 0; i < ROWS; i++)
+                {
+                    for (int j = 0; j < COLS; j++)
+                    {
+                        if (mines[i][j])
+                        {
+                            buttons[i][j]->setText("💣");
+                            buttons[i][j]->setEnabled(false);
+                            buttons[i][j]->setStyleSheet(R"(
+                                QPushButton {
+                                    background-color: #2C2C2C;
+                                    border: 3px solid #FF3333;
+                                    border-radius: 8px;
+                                    font-size: 18px;
+                                    color: white;
+                                }
+                            )");
+                        }
+                    }
+                }
+
+                buttons[row][col]->setText("💥");
+                buttons[row][col]->setStyleSheet(R"(
+                    QPushButton {
+                        background-color: #FF0000;
+                        border: 4px solid #FFD700;
+                        border-radius: 8px;
+                        font-size: 22px;
+                        color: white;
+                    }
+                )");
+
+                QMessageBox::critical(this, "💀 GAME OVER", "Вы подорвались на мине!");
+                return true;
+            }
+
+            openCell(row, col);
+            checkWin();
+            return true;
         }
-        if (row != -1) break;
     }
 
-    if (opened[row][col]) return;
-
-    if (!flagged[row][col]) {
-        if (flagsPlaced < MINES_COUNT) {
-            btn->setText("🚩");
-            btn->setStyleSheet("color: red;");
-            flagged[row][col] = true;
-            flagsPlaced++;
-        }
-    } else {
-        btn->setText("");
-        btn->setStyleSheet("");
-        flagged[row][col] = false;
-        flagsPlaced--;
-    }
-
-    updateFlagsLabel();
-    checkWin();
+    return false;
 }
 
 void Minessweeper::openCell(int row, int col)
 {
-    if (row < 0 || row >= ROWS || col < 0 || col >= COLS ||
-        opened[row][col] || flagged[row][col]) return;
+    if (row < 0 || row >= ROWS || col < 0 || col >= COLS)
+        return;
+
+    if (opened[row][col] || flagged[row][col])
+        return;
 
     opened[row][col] = true;
-    buttons[row][col]->setEnabled(false);
-    buttons[row][col]->setStyleSheet("background-color: lightgray;");
 
-    if (numbers[row][col] > 0) {
-        QColor color;
-        switch (numbers[row][col]) {
-        case 1: color = Qt::blue; break;
-        case 2: color = Qt::green; break;
-        case 3: color = Qt::red; break;
-        case 4: color = QColor(0, 0, 128); break;
-        case 5: color = QColor(128, 0, 0); break;
-        default: color = Qt::black;
-        }
-        buttons[row][col]->setText(QString::number(numbers[row][col]));
-        buttons[row][col]->setStyleSheet(QString("color: %1; background-color: lightgray;")
-                                             .arg(color.name()));
-    } else if (numbers[row][col] == 0) {
-        buttons[row][col]->setText("");
-        for (int dr = -1; dr <= 1; ++dr)
-            for (int dc = -1; dc <= 1; ++dc)
+    QPushButton *btn = buttons[row][col];
+    btn->setEnabled(false);
+    btn->setStyleSheet(R"(
+        background-color: white;
+        border-radius: 8px;
+        color: black;
+        font-size: 18px;
+        font-weight: bold;
+    )");
+
+    if (numbers[row][col] > 0)
+    {
+        btn->setText(QString::number(numbers[row][col]));
+    }
+    else
+    {
+        for (int dr = -1; dr <= 1; dr++)
+        {
+            for (int dc = -1; dc <= 1; dc++)
+            {
                 if (dr != 0 || dc != 0)
                     openCell(row + dr, col + dc);
+            }
+        }
     }
 }
 
 void Minessweeper::checkWin()
 {
-    bool allMinesFlagged = true;
-    bool allSafeOpened = true;
+    int safe = 0;
 
-    for (int i = 0; i < ROWS; ++i) {
-        for (int j = 0; j < COLS; ++j) {
-            if (mines[i][j]) {
-                if (!flagged[i][j]) allMinesFlagged = false;
-            } else {
-                if (!opened[i][j]) allSafeOpened = false;
-            }
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLS; j++)
+        {
+            if (!mines[i][j] && opened[i][j])
+                safe++;
         }
     }
 
-    if (allMinesFlagged || allSafeOpened) {
-        gameOver = true;
-        QMessageBox::information(this, "Победа!", "Вы обезвредили все мины!");
+    if (safe == ROWS * COLS - MINES)
+    {
+        timer->stop();
+        QMessageBox::information(this, "🏆 ПОБЕДА", "Вы нашли все мины!");
     }
 }
 
-void Minessweeper::updateFlagsLabel()
+void Minessweeper::updateFlags()
 {
-    flagsLabel->setText(QString("🚩 %1").arg(flagsPlaced));
+    if (flagsLabel)
+        flagsLabel->setText(QString("🚩 %1").arg(flagsPlaced));
+}
+
+void Minessweeper::explodeAnimation(int row, int col)
+{
+    QPushButton *btn = buttons[row][col];
+    QPropertyAnimation *anim = new QPropertyAnimation(btn, "geometry");
+    QRect start = btn->geometry();
+
+    anim->setDuration(300);
+    anim->setKeyValueAt(0, start);
+    anim->setKeyValueAt(0.5, QRect(start.x() - 8, start.y() - 8, start.width() + 16, start.height() + 16));
+    anim->setKeyValueAt(1, start);
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
+}
+
+void Minessweeper::shakeWindow()
+{
+    QPoint original = pos();
+    QPropertyAnimation *anim = new QPropertyAnimation(this, "pos");
+
+    anim->setDuration(400);
+    anim->setKeyValueAt(0.0, original);
+    anim->setKeyValueAt(0.1, original + QPoint(-10, 0));
+    anim->setKeyValueAt(0.2, original + QPoint(10, 0));
+    anim->setKeyValueAt(0.3, original + QPoint(-10, 0));
+    anim->setKeyValueAt(0.4, original + QPoint(10, 0));
+    anim->setKeyValueAt(1.0, original);
+
+    anim->start(QAbstractAnimation::DeleteWhenStopped);
 }
