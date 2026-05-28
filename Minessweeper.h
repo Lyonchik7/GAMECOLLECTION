@@ -2,45 +2,69 @@
 #define MINESSWEEPER_H
 
 #include <QWidget>
+#include <QPushButton>
 #include <QVector>
-
-class QPushButton;
-class QLabel;
+#include <QLabel>
+#include <QTimer>
+#include <QComboBox>
+#include <QStackedWidget>
 
 class Minessweeper : public QWidget
 {
-    Q_OBJECT
-
 public:
     explicit Minessweeper(QWidget *parent = nullptr);
 
-private slots:
-    void onLeftClick();
-    void onRightClick();
-    void restartGame();
-
 private:
-    void placeMines(int firstRow, int firstCol);
-    int countAdjacentMines(int row, int col);
-    void openCell(int row, int col);
-    void checkWin();
-    void updateFlagsLabel();
-
-    static const int ROWS = 9;
-    static const int COLS = 9;
-    static const int MINES_COUNT = 10;
+    int ROWS = 0;
+    int COLS = 0;
+    int MINES = 0;
 
     QVector<QVector<QPushButton*>> buttons;
+
     QVector<QVector<bool>> mines;
     QVector<QVector<int>> numbers;
     QVector<QVector<bool>> opened;
     QVector<QVector<bool>> flagged;
 
-    int flagsPlaced;
-    bool gameOver;
-    bool firstClick;
+    QLabel *flagsLabel = nullptr;
+    QLabel *timerLabel = nullptr;
+    QLabel *hintLabel = nullptr;
 
-    QLabel *flagsLabel;
+    QLabel *difficultyDescription = nullptr;
+    QLabel *themeDescription = nullptr;
+
+    QComboBox *difficultyBox = nullptr;
+    QComboBox *themeBox = nullptr;
+
+    QStackedWidget *stack = nullptr;
+    QWidget *menuWidget = nullptr;
+    QWidget *gameWidget = nullptr;
+
+    int flagsPlaced = 0;
+    bool gameOver = false;
+    bool firstClick = true;
+
+    QTimer *timer = nullptr;
+    int seconds = 0;
+
+    QString backgroundColor;
+
+    void createMenu();
+    void startGame();
+    void applyTheme();
+    void applyMenuTheme();
+    void restartGame();
+    void placeMines(int firstRow, int firstCol);
+    int countAdjacent(int row, int col);
+    void openCell(int row, int col);
+    void checkWin();
+    void updateFlags();
+    void explodeAnimation(int row, int col);
+    void shakeWindow();
+    void updateDescriptions();
+
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
 };
 
-#endif // MINESSWEEPER_H
+#endif
