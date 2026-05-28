@@ -6,6 +6,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QTimer>
+#include <QColorDialog>
 
 class TicTacToe : public QWidget
 {
@@ -24,6 +25,8 @@ private slots:
     void switchMode();
     void updateTimerDisplay();
     void timeOut();
+    void chooseColorX();
+    void chooseColorO();
 
 private:
     void checkGameState();
@@ -34,6 +37,8 @@ private:
     void updateScoreDisplay();
     void stopTimer();
     void startTimerForCurrentPlayer();
+    void updateButtonStyles();
+    void updatePlayerColors();
 
     QVector<QVector<QPushButton*>> buttons;
 
@@ -49,12 +54,17 @@ private:
     QPushButton *themeButton;
     QPushButton *modeButton;
     QPushButton *restartBtn;
+    QPushButton *colorXBtn;
+    QPushButton *colorOBtn;
 
     bool isDarkTheme;
     bool isTurboMode;
     int timeLimit;
     QTimer *gameTimer;
     int remainingTime;
+
+    QColor colorX;
+    QColor colorO;
 };
 
 #endif // TICTACTOE_H
